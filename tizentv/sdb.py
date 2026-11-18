@@ -82,10 +82,12 @@ class Tv:
         raise SdbError(f"Could not read the app list (last output: {r.out!r}). "
                        "Try `shell 0 vd_applist` / `shell 0 applist` by hand.")
 
-    def uninstall(self, app_id: str, method: str = "vd") -> Result:
+    def uninstall(self, app_id: str, method: str = "sdb") -> Result:
         if method == "tizen":
             return self._run(["tizen", "uninstall", "-p", app_id, "-t", self.target])
-        return self.shell("0", "vd_appuninstall", app_id)
+        if method == "vd":
+            return self.shell("0", "vd_appuninstall", app_id)
+        return self.sdb("-s", self.target, "uninstall", app_id)
 
     def install(self, wgt_path: str) -> Result:
         return self._run(["tizen", "install", "-n", wgt_path, "-t", self.target])
@@ -95,6 +97,23 @@ class Tv:
 
     def reboot(self) -> Result:
         return self.shell("reboot")
+
+
+# Never remove these: system packages, or store-prefixed helpers the TV needs
+# (per github.com/ardazeytin/samsung-tizen-tv-debloat).
+PROTECTED_PREFIXES = ("org.tizen.", "com.samsung.", "30IKH0OX8U.")
+PROTECTED_IDS = {"ZODRT12q2l.WebAccountExtension", "aQjWjLsPaO.MultiScreenWebLauncher",
+                 "adplatform.ADPlayer", "org.tizen.netflixlowmem"}
+
+
+def is_protected(app_id: str) -> bool:
+    return app_id in PROTECTED_IDS or app_id.startswith(PROTECTED_PREFIXES)
+
+
+def uninstall_candidates(app_id: str) -> list[str]:
+    """Tizen may want the package id (the 10-char prefix) rather than the app id."""
+    pkg = app_id.split(".", 1)[0]
+    return [app_id, pkg] if "." in app_id and pkg != app_id else [app_id]
 
 
 @dataclass(frozen=True)

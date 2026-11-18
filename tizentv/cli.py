@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from .sdb import SdbError, Tv, DEFAULT_PORT
+from .sdb import SdbError, Tv, DEFAULT_PORT, is_protected, uninstall_candidates
 from .wsapi import RemoteWs
 
 
@@ -28,9 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--file", "-f", help="text file with one app id or name per line (# comments ok)")
     u.add_argument("--yes", "-y", action="store_true", help="don't ask for confirmation")
     u.add_argument("--dry-run", action="store_true")
-    u.add_argument("--method", choices=["vd", "tizen"], default="vd",
-                   help="vd: `vd_appuninstall` over sdb shell (default); "
-                        "tizen: Tizen Studio CLI (only dev-installed apps)")
+    u.add_argument("--method", choices=["sdb", "vd", "tizen"], default="sdb",
+                   help="sdb: `sdb uninstall` (default); vd: `vd_appuninstall` over sdb shell "
+                        "(older firmware); tizen: Tizen Studio CLI")
+    u.add_argument("--force", action="store_true",
+                   help="allow system packages (org.tizen.*, com.samsung.*, ...). Can break the TV.")
     u.add_argument("--backup-dir", default=".", help="where the app-list backup is written")
 
     l = sub.add_parser("launch", help="launch an app")
@@ -158,6 +160,13 @@ def dispatch(tv, args, confirm) -> int:
             raise SdbError("Nothing to uninstall: give app ids/names or --file.")
         apps, raw = tv.list_apps()
         targets = resolve(apps, wanted)
+        blocked = [a for a in targets if is_protected(a.app_id)]
+        if blocked and not args.force:
+            for a in blocked:
+                print(f"skipping protected system package {a.app_id} ({a.name})", file=sys.stderr)
+            targets = [a for a in targets if a not in blocked]
+            if not targets:
+                return 1
         print("Will uninstall:")
         for a in targets:
             print(f"  {a.app_id}  ({a.name})")
@@ -169,11 +178,18 @@ def dispatch(tv, args, confirm) -> int:
         if not args.yes and confirm("Proceed? [y/N] ").strip().lower() != "y":
             print("Aborted.")
             return 1
-        failed = 0
+        # The TV's "ok" isn't proof: after each try, re-read the list to see if it's gone.
+        failed = []
         for a in targets:
-            r = tv.uninstall(a.app_id, args.method)
-            print(f"{'ok  ' if r.code == 0 else 'FAIL'} {a.app_id}: {r.out}")
-            failed += r.code != 0
+            for cand in uninstall_candidates(a.app_id):
+                r = tv.uninstall(cand, args.method)
+                print(f"  {cand}: {r.out or r.code}")
+                if a.app_id not in {x.app_id for x in tv.list_apps()[0]}:
+                    break
+            else:
+                failed.append(a)
+        for a in targets:
+            print(f"{'STILL THERE' if a in failed else 'removed    '} {a.app_id}  ({a.name})")
         return 1 if failed else 0
     elif args.cmd == "launch":
         apps, _ = tv.list_apps()

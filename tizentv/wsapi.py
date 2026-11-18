@@ -24,7 +24,7 @@ def _default_connector(url: str, timeout: float):
     try:
         import websocket  # websocket-client
     except ImportError:
-        raise SdbError("Install the websocket extra: pip install 'tizentv[ws]'") from None
+        raise SdbError("websocket-client missing: run `uv sync`") from None
     # TV uses a self-signed cert; this only ever talks to a LAN address you typed.
     return websocket.create_connection(url, timeout=timeout, sslopt={"cert_reqs": ssl.CERT_NONE})
 
