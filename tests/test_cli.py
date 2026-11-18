@@ -66,3 +66,12 @@ def test_connect_failure_message():
         return Result(0, "failed to connect to 1.2.3.4:26101")
     with pytest.raises(SdbError, match="Developer Mode"):
         Tv("1.2.3.4", runner=bad).connect()
+
+
+def test_uninstall_from_file(tmp_path):
+    f = tmp_path / "remove.txt"
+    f.write_text("# junk apps\nNetflix\norg.tizen.browser  # browser\n\n")
+    fake = FakeTv()
+    assert run(["uninstall", "--file", str(f), "-y", "--backup-dir", str(tmp_path)], fake) == 0
+    removed = [c[-1] for c in fake.calls if "vd_appuninstall" in c]
+    assert removed == ["org.tizen.netflix-app", "org.tizen.browser"]

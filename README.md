@@ -16,6 +16,7 @@ tizentv --host 192.168.1.50 apps --filter netflix
 tizentv --host 192.168.1.50 apps --raw          # unparsed TV output, if the list looks wrong
 tizentv --host 192.168.1.50 uninstall "Disney+" --dry-run
 tizentv --host 192.168.1.50 uninstall org.tizen.browser -y
+tizentv --host 192.168.1.50 uninstall --file remove.txt --dry-run   # bulk: one id/name per line
 tizentv --host 192.168.1.50 uninstall X --method tizen   # Tizen Studio CLI instead
 tizentv --host 192.168.1.50 reboot
 ```

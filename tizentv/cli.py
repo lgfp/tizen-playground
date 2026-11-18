@@ -24,7 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--json", action="store_true")
 
     u = sub.add_parser("uninstall", help="uninstall one or more apps by id or name")
-    u.add_argument("apps", nargs="+", help="app ids, or exact names")
+    u.add_argument("apps", nargs="*", help="app ids, or exact names")
+    u.add_argument("--file", "-f", help="text file with one app id or name per line (# comments ok)")
     u.add_argument("--yes", "-y", action="store_true", help="don't ask for confirmation")
     u.add_argument("--dry-run", action="store_true")
     u.add_argument("--method", choices=["vd", "tizen"], default="vd",
@@ -147,8 +148,16 @@ def dispatch(tv, args, confirm) -> int:
                 print(f"{a.app_id:<45} {a.name}")
             print(f"{len(apps)} apps", file=sys.stderr)
     elif args.cmd == "uninstall":
+        wanted = list(args.apps)
+        if args.file:
+            for line in Path(args.file).read_text().splitlines():
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    wanted.append(line)
+        if not wanted:
+            raise SdbError("Nothing to uninstall: give app ids/names or --file.")
         apps, raw = tv.list_apps()
-        targets = resolve(apps, args.apps)
+        targets = resolve(apps, wanted)
         print("Will uninstall:")
         for a in targets:
             print(f"  {a.app_id}  ({a.name})")
