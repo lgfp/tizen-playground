@@ -5,6 +5,9 @@ description = "Administer a Samsung Tizen TV (list/uninstall apps, etc.) over sd
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+ws = ["websocket-client>=1.6"]
+
 [project.scripts]
 tizentv = "tizentv.cli:main"
 

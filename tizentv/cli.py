@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .sdb import SdbError, Tv, DEFAULT_PORT
+from .wsapi import RemoteWs
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,6 +39,18 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("reboot", help="reboot the TV")
     sh = sub.add_parser("shell", help="run a raw command in the TV's shell")
     sh.add_argument("command", nargs="+")
+
+    ws = sub.add_parser("ws", help="network API (no Developer Mode): info, apps, launch, key")
+    ws.add_argument("--ws-port", type=int, default=8002)
+    wsub = ws.add_subparsers(dest="ws_cmd", required=True)
+    wsub.add_parser("info", help="device info (model, power state, Frame support)")
+    wa = wsub.add_parser("apps", help="list installed apps")
+    wa.add_argument("--filter")
+    wa.add_argument("--json", action="store_true")
+    wl = wsub.add_parser("launch", help="launch an app by id or exact name")
+    wl.add_argument("app")
+    wk = wsub.add_parser("key", help="send remote keys, e.g. KEY_HOME KEY_MENU KEY_1 KEY_2")
+    wk.add_argument("keys", nargs="+")
     return p
 
 
@@ -60,8 +73,14 @@ def resolve(tv_apps, wanted: list[str]):
     return out
 
 
-def main(argv=None, tv_factory=Tv, confirm=input) -> int:
+def main(argv=None, tv_factory=Tv, confirm=input, ws_factory=RemoteWs) -> int:
     args = build_parser().parse_args(argv)
+    if args.cmd == "ws":
+        try:
+            return ws_dispatch(ws_factory(args.host, args.ws_port), args)
+        except SdbError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
     tv = tv_factory(args.host, args.port)
     try:
         tv.connect()
@@ -69,6 +88,44 @@ def main(argv=None, tv_factory=Tv, confirm=input) -> int:
     except SdbError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+
+
+def ws_dispatch(ws, args) -> int:
+    if args.ws_cmd == "info":
+        d = ws.info()
+        dev = d.get("device", {})
+        print(f"{dev.get('modelName', '?')}  {dev.get('name', '')}  power={dev.get('PowerState', '?')}"
+              f"  frame={dev.get('FrameTVSupport', '?')}  os={dev.get('OS', '?')}")
+        return 0
+    ws.open()
+    try:
+        if args.ws_cmd == "key":
+            import time
+            for k in args.keys:
+                ws.key(k)
+                time.sleep(0.3)
+        elif args.ws_cmd == "apps":
+            apps = ws.apps()
+            if args.filter:
+                f = args.filter.lower()
+                apps = [a for a in apps if f in str(a.get("name", "")).lower() or f in str(a.get("appId", "")).lower()]
+            if args.json:
+                print(json.dumps(apps, indent=2))
+            else:
+                for a in sorted(apps, key=lambda a: str(a.get("name", "")).lower()):
+                    print(f"{a.get('appId', ''):<30} {a.get('name', '')}")
+                print(f"{len(apps)} apps", file=sys.stderr)
+        elif args.ws_cmd == "launch":
+            wanted = args.app
+            for a in ws.apps():
+                if wanted in (a.get("appId"), a.get("name")) or str(a.get("name", "")).lower() == wanted.lower():
+                    wanted = a["appId"]
+                    break
+            ws.launch(wanted)
+            print(f"launch sent: {wanted}")
+    finally:
+        ws.close()
+    return 0
 
 
 def dispatch(tv, args, confirm) -> int:

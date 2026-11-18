@@ -22,6 +22,18 @@ tizentv --host 192.168.1.50 reboot
 `uninstall` shows what it will remove, writes a JSON backup of the full app list
 (`tv-apps-<timestamp>.json`), and asks before acting (`-y` to skip).
 
+## Network API mode (no Developer Mode)
+```
+pip install -e '.[ws]'
+tizentv --host 192.168.1.50 ws info
+tizentv --host 192.168.1.50 ws apps --filter netflix     # first run: choose Allow on the TV
+tizentv --host 192.168.1.50 ws launch YouTube
+tizentv --host 192.168.1.50 ws key KEY_HOME KEY_MENU     # KEY_0..KEY_9 work too
+```
+Same API the SmartThings remote uses; the token is cached in `~/.config/tizentv/tokens.json`.
+It can list/launch apps and send keys, but **cannot uninstall** (Samsung doesn't expose that).
+Samsung has changed this API between firmware generations, so `ws apps` may be empty on some 2024 models.
+
 ## Caveats
 - Tested only against a fake `sdb` (`pytest`); **not yet run against a real TV**. The `applist` output
   format and the `vd_appuninstall` command vary by model year/firmware, so start with `apps --raw` and `--dry-run`.
