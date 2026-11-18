@@ -74,10 +74,13 @@ class Tv:
     def list_apps(self) -> tuple[list["App"], str]:
         """Returns (apps, raw_output). Output format varies by firmware, so the
         raw text is returned too (see `apps --raw`)."""
-        r = self.shell("0", "applist")
-        if r.code != 0:
-            raise SdbError(f"applist failed: {r.out}")
-        return parse_applist(r.out), r.out
+        for cmd in ("vd_applist", "applist"):
+            r = self.shell("0", cmd)
+            apps = parse_applist(r.out) if r.code == 0 else []
+            if apps:
+                return apps, r.out
+        raise SdbError(f"Could not read the app list (last output: {r.out!r}). "
+                       "Try `shell 0 vd_applist` / `shell 0 applist` by hand.")
 
     def uninstall(self, app_id: str, method: str = "vd") -> Result:
         if method == "tizen":

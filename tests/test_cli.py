@@ -23,7 +23,7 @@ class FakeTv:
         a = " ".join(argv)
         if "connect" in a:
             return Result(0, "connected to 1.2.3.4:26101")
-        if a.endswith("0 applist"):
+        if a.endswith("0 vd_applist") or a.endswith("0 applist"):
             return Result(0, APPLIST)
         if "vd_appuninstall" in a:
             return Result(0, "uninstall ok")
